@@ -1,0 +1,14 @@
+node_modules
+dist
+*.local
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.DS_Store
+
+# Supabase CLI working files
+supabase/.temp
+supabase/.branches
+supabase/.env
+supabase/functions/.env
