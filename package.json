@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/sitemap.mjs",
     "typecheck": "tsc -b",
     "preview": "vite preview",
     "dev:local": "vite --mode localdb",
-    "test:ui": "node tests/ui_e2e.mjs"
+    "test:ui": "node tests/ui_e2e.mjs",
+    "brand": "node scripts/make-brand-assets.mjs"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "1.2.3",

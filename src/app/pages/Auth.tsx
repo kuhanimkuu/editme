@@ -9,6 +9,8 @@ import { Spinner, safeNext } from '../components/common';
 import { useAuth } from '../context/UserContext';
 import { supabase } from '../../lib/supabase';
 import { errorMessage } from '../../lib/errors';
+import { LogoMark } from '../components/Logo';
+import { LEGAL } from '../../lib/legal';
 
 /** The same rule the server enforces: 8+ characters, letters and digits. */
 export function passwordProblem(pw: string): string | null {
@@ -22,9 +24,7 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle?: st
     <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center px-4 py-10" style={{ fontFamily: "'Inter', sans-serif" }}>
       <div className="w-full max-w-sm">
         <Link to="/" className="flex items-center justify-center gap-2.5 mb-8">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#9333ea] via-[#ec4899] to-[#f97316] flex items-center justify-center shadow-sm">
-            <span className="text-white font-bold" style={{ fontFamily: "'Poppins', sans-serif" }}>E</span>
-          </div>
+          <LogoMark className="w-9 h-9" />
           <span className="text-2xl font-bold tracking-tight" style={{ fontFamily: "'Poppins', sans-serif" }}>EditMe</span>
         </Link>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
@@ -149,6 +149,7 @@ export function SignUp() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -161,13 +162,15 @@ export function SignUp() {
     e.preventDefault();
     const problem = passwordProblem(password);
     if (problem) return setError(problem);
+    if (!agreed) return setError(`Please confirm you are ${LEGAL.minimumAge} or over and agree to the Terms and Privacy Policy.`);
     setBusy(true);
     setError(null);
     const { data, error: err } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
-        data: { display_name: name.trim(), role },
+        // Which version of the Terms they accepted, kept with the account.
+        data: { display_name: name.trim(), role, terms_version: LEGAL.version, terms_accepted_at: new Date().toISOString() },
         emailRedirectTo: `${window.location.origin}${role === 'editor' ? '/profile' : next}`,
       },
     });
@@ -224,8 +227,18 @@ export function SignUp() {
             {pwProblem ?? 'At least 8 characters, with letters and numbers'}
           </p>
         </div>
+        <label htmlFor="agree" className="flex items-start gap-2.5 text-xs text-gray-600 leading-relaxed cursor-pointer">
+          <input id="agree" type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)}
+            className="mt-0.5 w-4 h-4 rounded border-gray-300 accent-[#2979FF] flex-shrink-0" />
+          <span>
+            I'm {LEGAL.minimumAge} or over and I agree to the{' '}
+            <Link to="/terms" target="_blank" className="text-[#2979FF] hover:underline">Terms of Service</Link>,{' '}
+            <Link to="/acceptable-use" target="_blank" className="text-[#2979FF] hover:underline">Acceptable Use Policy</Link> and{' '}
+            <Link to="/privacy" target="_blank" className="text-[#2979FF] hover:underline">Privacy Policy</Link>.
+          </span>
+        </label>
         {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
-        <Button type="submit" disabled={busy || !name.trim()} className="w-full rounded-xl h-10 bg-[#2979FF] hover:bg-[#1565C0]">
+        <Button type="submit" disabled={busy || !name.trim() || !agreed} className="w-full rounded-xl h-10 bg-[#2979FF] hover:bg-[#1565C0]">
           {busy ? <Spinner className="text-white" /> : 'Create account'}
         </Button>
         <p className="text-sm text-center text-gray-500">

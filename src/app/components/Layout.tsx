@@ -11,6 +11,7 @@ import { UserAvatar } from './common';
 import { NotificationsMenu, useNotifications } from './Notifications';
 import { useSaved } from '../context/SavedContext';
 import { categories, categoryLabels } from '../../lib/format';
+import { LogoMark } from './Logo';
 
 const workNav = [
   { path: '/saved', icon: Heart, label: 'Saved' },
@@ -43,7 +44,18 @@ const pageTitles: Record<string, string> = {
   '/notifications': 'Notifications',
   '/how-it-works': 'How it works',
   '/help': 'Help & FAQ',
+  '/terms': 'Terms of Service',
+  '/privacy': 'Privacy Policy',
+  '/refunds': 'Payments & refunds',
+  '/acceptable-use': 'Acceptable use',
 };
+
+const legalLinks = [
+  ['/terms', 'Terms'],
+  ['/privacy', 'Privacy'],
+  ['/refunds', 'Refunds'],
+  ['/acceptable-use', 'Acceptable use'],
+] as const;
 
 export function Layout() {
   const location = useLocation();
@@ -116,9 +128,7 @@ export function Layout() {
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <Link to="/" onClick={close} className="flex items-center gap-3 px-5 h-16 border-b border-gray-100 flex-shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#9333ea] via-[#ec4899] to-[#f97316] flex items-center justify-center flex-shrink-0 shadow-sm">
-            <span className="text-white font-bold text-sm" style={{ fontFamily: "'Poppins', sans-serif" }}>E</span>
-          </div>
+          <LogoMark className="w-8 h-8" />
           <span className="text-xl font-bold tracking-tight" style={{ fontFamily: "'Poppins', sans-serif" }}>EditMe</span>
         </Link>
 
@@ -168,6 +178,13 @@ export function Layout() {
                 navLink(path, icon, label, path === '/notifications' ? notifications.unreadCount - notifications.unreadChats : undefined))}
             </div>
           )}
+
+          <div className="pt-4 mt-3 px-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400">
+            {legalLinks.map(([path, label]) => (
+              <Link key={path} to={path} onClick={close} className="hover:text-gray-600 hover:underline">{label}</Link>
+            ))}
+            <span>© {new Date().getFullYear()} EditMe</span>
+          </div>
         </nav>
 
         <div className="flex-shrink-0 px-3 pb-4 pt-2 border-t border-gray-100 space-y-2">

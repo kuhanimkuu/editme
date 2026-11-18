@@ -16,7 +16,8 @@ mkdirSync(OUT, { recursive: true });
 const browser = await puppeteer.launch({
   executablePath: process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe',
   headless: true,
-  args: ['--force-prefers-reduced-motion', '--window-size=1400,900'],
+  // GitHub's Linux runners can't start Chrome's sandbox; the page is our own local build.
+  args: ['--force-prefers-reduced-motion', '--window-size=1400,900', ...(process.env.CI ? ['--no-sandbox'] : [])],
   defaultViewport: { width: 1400, height: 900 },
 });
 const page = await browser.newPage();
@@ -166,6 +167,29 @@ await check('Hiring signed out asks to sign in', async () => {
 await check('Private pages redirect to sign-in', async () => {
   await page.goto(`${BASE}/wallet`, { waitUntil: 'networkidle0' });
   await page.waitForFunction(() => location.pathname === '/sign-in', { timeout: 8000 });
+});
+
+await check('Legal pages open from the sidebar and link to each other', async () => {
+  await page.goto(BASE, { waitUntil: 'networkidle0' });
+  await clickText('Terms', 'aside a');
+  await seeText('Terms of Service');
+  await seeText('Who owns the finished work');
+  await clickText('Payments & refunds', 'nav[aria-label=Legal] a');
+  await seeText('Full refund, automatically');
+  await clickText('Privacy', 'nav[aria-label=Legal] a');
+  await seeText('Cookies and local storage');
+  await shot('03-legal');
+});
+
+await check('Sign-up needs the terms box ticked', async () => {
+  await page.goto(`${BASE}/sign-up`, { waitUntil: 'networkidle0' });
+  await page.type('#name', 'Test Person');
+  await page.type('#email', 'nobody@editme.local');
+  await page.type('#password', 'editme-local-1');
+  const disabled = () => page.$eval('form button[type=submit]', (b) => b.disabled);
+  if (!(await disabled())) throw new Error('Create account is enabled before agreeing');
+  await page.click('#agree');
+  if (await disabled()) throw new Error('Create account still disabled after agreeing');
 });
 
 await check('Wrong password is refused politely', async () => {

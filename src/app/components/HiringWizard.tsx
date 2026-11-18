@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -257,6 +257,11 @@ export function HiringWizard({ editor, isOpen, onClose, planId }: HiringWizardPr
                   </p>
                 </div>
               </div>
+              <p className="text-xs text-gray-500 text-center">
+                By paying you agree to the{' '}
+                <Link to="/terms" target="_blank" className="text-[#2979FF] hover:underline">Terms</Link> and the{' '}
+                <Link to="/refunds" target="_blank" className="text-[#2979FF] hover:underline">Payments, Escrow and Refunds Policy</Link>.
+              </p>
               {error && <p className="text-sm text-red-600 text-center" role="alert">{error}</p>}
             </div>
           )}

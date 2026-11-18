@@ -4,6 +4,7 @@ import { Search, LifeBuoy } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../components/ui/accordion';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
+import { LEGAL } from '../../lib/legal';
 
 type Faq = { q: string; a: string };
 
@@ -14,6 +15,7 @@ const sections: { title: string; faqs: Faq[] }[] = [
     faqs: [
       { q: 'Is EditMe for clients or editors?', a: 'Both. Anyone can hire. To offer work, switch to Editor mode in the sidebar and set up your editor profile. You can switch between the two at any time.' },
       { q: 'What does "Sample" mean on a profile?', a: 'Sample profiles show what EditMe looks like while it grows. They are not real editors, have no ratings and cannot be hired. Real editors always appear first, and samples disappear as real editors join each category.' },
+      { q: 'Where are the terms and privacy policy?', a: 'See Terms of Service, Privacy Policy, Payments & refunds and Acceptable use, linked at the bottom of this page and of the sidebar.' },
       { q: "I didn't get the confirmation email.", a: 'Check your spam folder and wait a minute. If it still hasn\'t arrived, try signing up again with the same email; we\'ll send a new link.' },
     ],
   },
@@ -87,6 +89,18 @@ export function Help() {
         <h2 className="font-semibold text-gray-900 mb-1">A problem with a project?</h2>
         <p className="text-sm text-gray-600 mb-4">Open the project and choose "Report a problem". The money stays safe in escrow while EditMe looks into it.</p>
         <Button asChild variant="outline" className="rounded-xl"><Link to="/projects">Go to projects</Link></Button>
+      </div>
+
+      <div className="mt-6 text-center text-sm text-gray-500 space-y-2">
+        {LEGAL.contactEmail && (
+          <p>Anything else? Email <a href={`mailto:${LEGAL.contactEmail}`} className="text-[#2979FF] hover:underline">{LEGAL.contactEmail}</a>.</p>
+        )}
+        <p>
+          <Link to="/terms" className="hover:underline">Terms of Service</Link> ·{' '}
+          <Link to="/privacy" className="hover:underline">Privacy Policy</Link> ·{' '}
+          <Link to="/refunds" className="hover:underline">Payments &amp; refunds</Link> ·{' '}
+          <Link to="/acceptable-use" className="hover:underline">Acceptable use</Link>
+        </p>
       </div>
     </div>
   );

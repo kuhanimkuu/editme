@@ -8,6 +8,7 @@ import { NotFound } from './pages/NotFound';
 // fetched the first time it's opened, so the charts library (Analytics) and
 // the rest don't slow down the first load.
 const auth = () => import('./pages/Auth');
+const legal = () => import('./pages/Legal');
 
 export const router = createBrowserRouter([
   { path: '/sign-in', lazy: () => auth().then((m) => ({ Component: m.SignIn })) },
@@ -31,6 +32,10 @@ export const router = createBrowserRouter([
         path: 'help',
         lazy: () => import('./pages/Help').then((m) => ({ Component: m.Help })),
       },
+      { path: 'terms', lazy: () => legal().then((m) => ({ Component: m.Terms })) },
+      { path: 'privacy', lazy: () => legal().then((m) => ({ Component: m.Privacy })) },
+      { path: 'refunds', lazy: () => legal().then((m) => ({ Component: m.Refunds })) },
+      { path: 'acceptable-use', lazy: () => legal().then((m) => ({ Component: m.AcceptableUse })) },
       {
         // Everything below needs a sign-in.
         Component: Protected,

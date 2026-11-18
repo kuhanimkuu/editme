@@ -50,6 +50,52 @@ Preview), then redeploy; they're baked in at build time:
 The site's address must also be the Supabase sign-in site URL / allowed
 redirect and the `APP_URL` function secret (see `supabase/SETUP.md`).
 
+**Moving to another domain:** also change the address in `index.html`
+(canonical + link-preview tags) and the default `SITE_URL` in
+`scripts/sitemap.mjs` (or set `SITE_URL` in Vercel).
+
+## Icon, link previews and search
+
+- **Icon:** `brand/mark.svg` (an "E" whose middle bar is a play button) is the
+  source. `npm run brand` renders `public/favicon.svg/.ico`,
+  `apple-touch-icon.png`, `icon-192/512.png`, `icon-maskable-512.png` and the
+  1200×630 link-preview picture `public/og-image.png` (from `brand/og.html`).
+  The outputs are committed; rerun only after changing `brand/`. In the app,
+  `src/app/components/Logo.tsx` draws the same mark.
+- **Link previews:** Open Graph and Twitter tags in `index.html`, so a shared
+  link shows the picture, title and description. The app is a single page, so
+  every link (including editor pages) shares that one preview.
+- **Search engines:** `npm run build` ends with `scripts/sitemap.mjs`, which
+  writes `dist/sitemap.xml` (public pages plus every real editor profile,
+  read with the public key at build time) and `dist/robots.txt` (keeps
+  signed-in pages out). It refreshes on every deploy.
+- **Install to home screen:** `public/site.webmanifest`.
+
+## Legal pages
+
+`/terms`, `/privacy`, `/refunds` (payments, escrow and refunds) and
+`/acceptable-use`, all in `src/app/pages/Legal.tsx`, linked from the sidebar,
+the Help page, sign-up (a required "18 or over and I agree" box; the accepted
+version is saved with the account as `terms_version`) and the payment step.
+
+They describe what the code does (escrow, refunds, disputes, deletion), so
+**change them together with those rules.** Company name, address, contact
+email, governing law and the effective date are in `src/lib/legal.ts`; bump
+`version` and `effective` whenever the wording changes. They are a starting
+draft: have a lawyer review them before launch.
+
+## Automatic tests (GitHub Actions)
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull
+request:
+
+1. **Typecheck and build**, plus `npm audit` for runtime packages.
+2. **End-to-end** on a throwaway local Supabase inside GitHub (never the live
+   project): the database rules test, the edge function test and the website
+   test in Chrome. On failure, screenshots and logs are attached to the run.
+
+Results: the repository's **Actions** tab, and a ✓ or ✗ next to each commit.
+
 ## Screens
 
 | Path | Page | Sign-in |
@@ -181,7 +227,7 @@ withdraw flow, plus a declined project, sample profiles and two-step
 sign-in. It also tries the attacks the rules must block. Everything is
 rolled back afterwards.
 
-**Test the website in Chrome** (34 checks: browsing, sign-in, hiring and
+**Test the website in Chrome** (36 checks: browsing, legal pages, sign-up consent, sign-in, hiring and
 paying, approving, reviews, chat, wallet, withdrawals, profile, settings,
 phone width). Local stack only; it refuses to run against the live project:
 

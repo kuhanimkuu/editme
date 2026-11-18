@@ -55,7 +55,10 @@ select vault.update_secret((select id from vault.secrets where name = 'cron_secr
 - **Own domain**: when the site moves from editme-eosin.vercel.app, update
   `site_url` / `additional_redirect_urls` in `config.toml` (then
   `config push`), the `APP_URL` secret, and `connect-src` etc. in
-  `vercel.json` only if the Supabase project changes.
+  `vercel.json` only if the Supabase project changes. Also the address in
+  `index.html` (link previews) and `SITE_URL` in `scripts/sitemap.mjs`.
+- **Legal pages**: fill in the company name, address and contact email in
+  `src/lib/legal.ts`, and have a lawyer review `src/app/pages/Legal.tsx`.
 - **Payment provider**: until one is chosen, payments answer "not set up yet".
 
 Never share the secret / service_role key, the database password or an

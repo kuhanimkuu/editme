@@ -1,0 +1,97 @@
+# Runs on every push to main and every pull request.
+#  1. build: typecheck, production build, and a check for known-vulnerable runtime packages.
+#  2. e2e:   starts a throwaway local Supabase (never the live project), then runs
+#            the database rules test, the edge function test and the website test in Chrome.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Typecheck and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Known vulnerabilities in runtime packages
+        run: npm audit --omit=dev --audit-level=high
+
+  e2e:
+    name: Database, functions and website tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE: npx --yes supabase@3.2.0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      - name: Start local Supabase (migrations + seed.sql)
+        run: $SUPABASE start -x studio,imgproxy,vector,logflare,supavisor
+
+      - name: Database rules (supabase/tests/escrow_flow.sql)
+        run: docker exec -i supabase_db_editme psql -U postgres -v ON_ERROR_STOP=1 < supabase/tests/escrow_flow.sql
+
+      - name: Local env files
+        run: |
+          status="$($SUPABASE status -o json)"
+          url="$(jq -r '.API_URL' <<<"$status")"
+          key="$(jq -r '.PUBLISHABLE_KEY // .ANON_KEY' <<<"$status")"
+          printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\n' "$url" "$key" > .env.localdb.local
+          printf 'PAYMENTS_MODE=test\nAPP_URL=http://localhost:5180\nCRON_SECRET=%s\n' "$(openssl rand -hex 24)" > supabase/functions/.env
+
+      - name: Serve edge functions
+        run: |
+          nohup $SUPABASE functions serve --env-file supabase/functions/.env > functions.log 2>&1 &
+          for i in $(seq 1 90); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:54321/functions/v1/escrow-fund || true)
+            case "$code" in 2*|400|401|403|405) echo "functions up ($code)"; exit 0;; esac
+            sleep 2
+          done
+          cat functions.log; exit 1
+
+      - name: Edge functions (supabase/tests/functions_e2e.mjs)
+        run: node supabase/tests/functions_e2e.mjs
+
+      - name: Fresh seed data for the website test
+        run: $SUPABASE db reset
+
+      - name: Website in Chrome (tests/ui_e2e.mjs)
+        env:
+          CI: '1'
+        run: |
+          nohup npm run dev:local -- --port 5180 --strictPort > vite.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:5180 > /dev/null && break; sleep 1; done
+          CHROME_PATH="$(command -v google-chrome || command -v chromium)" npm run test:ui
+
+      - name: Screenshots and logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure
+          path: |
+            tests/shots/
+            functions.log
+            vite.log
+          retention-days: 7
