@@ -1,24 +1,32 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams, Outlet } from 'react-router';
 import {
-  Home, Briefcase, Wallet, BarChart3, MessageSquare, User,
-  Settings, Menu, Plus, RefreshCw, Search, LogOut, LogIn,
+  Home, Briefcase, Wallet, BarChart3, MessageSquare, User, Heart, Bell,
+  Settings, Menu, Plus, RefreshCw, Search, LogOut, LogIn, ChevronDown, Compass, LifeBuoy,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { useAuth } from '../context/UserContext';
 import { UserAvatar } from './common';
 import { NotificationsMenu, useNotifications } from './Notifications';
+import { useSaved } from '../context/SavedContext';
+import { categories, categoryLabels } from '../../lib/format';
 
-const mainNav = [
-  { path: '/', icon: Home, label: 'Discover', public: true },
+const workNav = [
+  { path: '/saved', icon: Heart, label: 'Saved' },
   { path: '/projects', icon: Briefcase, label: 'Projects' },
   { path: '/chat', icon: MessageSquare, label: 'Messages' },
   { path: '/wallet', icon: Wallet, label: 'Wallet' },
   { path: '/analytics', icon: BarChart3, label: 'Analytics' },
 ];
 
+const exploreNav = [
+  { path: '/how-it-works', icon: Compass, label: 'How it works' },
+  { path: '/help', icon: LifeBuoy, label: 'Help & FAQ' },
+];
+
 const accountNav = [
+  { path: '/notifications', icon: Bell, label: 'Notifications' },
   { path: '/profile', icon: User, label: 'Profile' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];
@@ -31,6 +39,10 @@ const pageTitles: Record<string, string> = {
   '/analytics': 'Analytics',
   '/profile': 'Profile',
   '/settings': 'Settings',
+  '/saved': 'Saved editors',
+  '/notifications': 'Notifications',
+  '/how-it-works': 'How it works',
+  '/help': 'Help & FAQ',
 };
 
 export function Layout() {
@@ -40,6 +52,11 @@ export function Layout() {
   const { user, profile, mode, setMode, editorProfile, signOut } = useAuth();
   const notifications = useNotifications(user?.id ?? null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { ids: savedIds } = useSaved();
+  const onDiscover = location.pathname === '/';
+  const activeCategory = onDiscover ? params.get('category') : null;
+  // Open on Discover, folded elsewhere (keeps the sidebar short).
+  const [categoriesOpen, setCategoriesOpen] = useState(location.pathname === '/');
   const [query, setQuery] = useState(location.pathname === '/' ? params.get('q') ?? '' : '');
 
   const pageTitle = pageTitles[location.pathname] ?? (location.pathname.startsWith('/editors/') ? 'Editor' : 'EditMe');
@@ -63,8 +80,10 @@ export function Layout() {
     navigate('/');
   };
 
-  const navLink = (path: string, Icon: typeof Home, label: string, badge?: number) => {
-    const isActive = location.pathname === path;
+  /** muted: a count shown in grey (e.g. how many saved), not an alert. */
+  const navLink = (path: string, Icon: typeof Home, label: string, badge?: number, muted = false) => {
+    // Discover is "active" only without a category picked (those highlight below it).
+    const isActive = location.pathname === path && !(path === '/' && activeCategory);
     return (
       <Link
         key={path}
@@ -77,8 +96,9 @@ export function Layout() {
       >
         <Icon className="w-[18px] h-[18px] flex-shrink-0" />
         <span className="font-medium text-[13.5px] flex-1">{label}</span>
-        {!!badge && !isActive && (
-          <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-[#2979FF] text-white text-[11px] font-semibold flex items-center justify-center">
+        {!!badge && badge > 0 && !isActive && (
+          <span className={`min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold flex items-center justify-center ${
+            muted ? 'bg-gray-100 text-gray-500' : 'bg-[#2979FF] text-white'}`}>
             {badge}
           </span>
         )}
@@ -102,16 +122,50 @@ export function Layout() {
           <span className="text-xl font-bold tracking-tight" style={{ fontFamily: "'Poppins', sans-serif" }}>EditMe</span>
         </Link>
 
-        <nav className="flex-1 overflow-y-auto px-3 pt-5 pb-2 space-y-0.5">
-          {mainNav
-            .filter((item) => user || item.public)
-            .map(({ path, icon, label }) =>
-              navLink(path, icon, label, path === '/chat' ? notifications.unreadChats : undefined))}
+        <nav className="flex-1 overflow-y-auto px-3 pt-5 pb-2 space-y-0.5" aria-label="Main">
+          {/* Discover, with its categories folded underneath */}
+          <div className="flex items-center gap-1">
+            <div className="flex-1">{navLink('/', Home, 'Discover')}</div>
+            <button onClick={() => setCategoriesOpen((o) => !o)} aria-expanded={categoriesOpen} aria-controls="nav-categories"
+              aria-label={categoriesOpen ? 'Hide categories' : 'Show categories'}
+              className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50">
+              <ChevronDown className={`w-4 h-4 transition-transform ${categoriesOpen ? '' : '-rotate-90'}`} />
+            </button>
+          </div>
+          {categoriesOpen && (
+            <div id="nav-categories" className="ml-5 pl-3 border-l border-gray-100 space-y-0.5 py-1">
+              {categories.map((c) => {
+                const active = activeCategory === c;
+                return (
+                  <Link key={c} to={`/?category=${c}`} onClick={close} aria-current={active ? 'page' : undefined}
+                    className={`block px-3 py-1.5 rounded-lg text-[12.5px] transition-colors ${
+                      active ? 'bg-[#EFF6FF] text-[#2979FF] font-semibold' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}>
+                    {categoryLabels[c]}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {user && (
+            <div className="pt-3 mt-2 border-t border-gray-100 space-y-0.5">
+              {workNav.map(({ path, icon, label }) =>
+                navLink(path, icon, label,
+                  path === '/chat' ? notifications.unreadChats : path === '/saved' ? savedIds.size : undefined,
+                  path === '/saved'))}
+            </div>
+          )}
+
+          <div className="pt-4 mt-3 border-t border-gray-100">
+            <p className="px-3 mb-2 text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Explore</p>
+            {exploreNav.map(({ path, icon, label }) => navLink(path, icon, label))}
+          </div>
 
           {user && (
             <div className="pt-4 mt-3 border-t border-gray-100">
               <p className="px-3 mb-2 text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Account</p>
-              {accountNav.map(({ path, icon, label }) => navLink(path, icon, label))}
+              {accountNav.map(({ path, icon, label }) =>
+                navLink(path, icon, label, path === '/notifications' ? notifications.unreadCount - notifications.unreadChats : undefined))}
             </div>
           )}
         </nav>

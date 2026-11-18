@@ -90,7 +90,64 @@ await check('Search filters editors', async () => {
   await page.goto(BASE, { waitUntil: 'networkidle0' });
 });
 
+await check('Sidebar categories open Discover on that category', async () => {
+  await page.goto(BASE, { waitUntil: 'networkidle0' });
+  await page.click('#nav-categories a[href="/?category=colorist"]');
+  await page.waitForFunction(() => location.search === '?category=colorist');
+  await wait(500);
+  const names = await page.evaluate(() => [...document.querySelectorAll('main h3')].map((h) => h.textContent));
+  if (names.join() !== 'Leo Park') throw new Error(names.join());
+  const current = await page.$eval('#nav-categories [aria-current=page]', (a) => a.textContent);
+  if (current !== 'Colorist') throw new Error(`highlighted: ${current}`);
+  await page.click('button[aria-label="Hide categories"]');
+  if (await page.$('#nav-categories')) throw new Error('categories did not fold');
+  await page.click('button[aria-label="Show categories"]');
+});
+
+await check('Filter groups fold open and closed', async () => {
+  await page.goto(BASE, { waitUntil: 'networkidle0' });
+  if (await page.evaluate(() => document.querySelector('aside')?.innerText.includes('Final Cut Pro'))) throw new Error('Software should start folded');
+  await clickText('Software', 'aside button');
+  await seeText('Final Cut Pro');
+  await page.click('aside label ::-p-text(DaVinci Resolve)');
+  await wait(300);
+  const names = await page.evaluate(() => [...document.querySelectorAll('main h3')].map((h) => h.textContent));
+  if (names.includes('Sara Lind') || !names.includes('Ama Owusu')) throw new Error(names.join());
+  await clickText('Specialization', 'aside button');
+  if (await page.$('aside button[aria-pressed]')) throw new Error('Specialization did not fold');
+  await shot('17-filters-folded');
+});
+
+await check('Hiding the filter panel is remembered', async () => {
+  await clickText('Hide filters', 'button');
+  await page.reload({ waitUntil: 'networkidle0' });
+  await seeText('Ama Owusu');
+  if (await bodyHas('Hide filters')) throw new Error('panel came back open');
+  await clickText('Filters', 'button[aria-expanded=false]');
+  await seeText('Hide filters');
+});
+
+await check('How it works and Help pages (signed out)', async () => {
+  await page.click('nav a[href="/how-it-works"]');
+  await page.waitForFunction(() => document.querySelector('main')?.innerText.includes('The rules that protect both sides'));
+  await seeText('EditMe currently charges no platform fee.');
+  await shot('18-how-it-works');
+  await page.click('nav a[href="/help"]');
+  await page.waitForSelector('input[aria-label="Search questions"]');
+  await page.type('input[aria-label="Search questions"]', 'refund');
+  await clickText('Can I get a refund?');
+  await seeText('in full, if the editor declines');
+  await shot('19-help');
+});
+
+await check('Saving while signed out asks to sign in', async () => {
+  await page.goto(BASE, { waitUntil: 'networkidle0' });
+  await page.click('button[aria-label="Save Ama Owusu"]');
+  await page.waitForFunction(() => location.pathname === '/sign-in', { timeout: 8000 });
+});
+
 await check('An editor page shows plans, portfolio and reviews', async () => {
+  await page.goto(BASE, { waitUntil: 'networkidle0' });
   await clickText('Leo Park', 'h3');
   await seeText('Projects done');
   await clickText('reviews', 'button[role=tab]');
@@ -234,12 +291,44 @@ await check('Profile (client) shows hired editors and reviews', async () => {
 await check('Settings: change the name', async () => {
   await page.goto(`${BASE}/settings`, { waitUntil: 'networkidle0' });
   const input = await page.waitForSelector('#settings-name');
-  await input.click({ clickCount: 3 });
+  await input.click();
+  await page.keyboard.down('Control'); await page.keyboard.press('KeyA'); await page.keyboard.up('Control');
+  await page.keyboard.press('Backspace');
   await input.type('Tech Corp Kenya');
+  if ((await input.evaluate((el) => el.value)) !== 'Tech Corp Kenya') throw new Error('name field not replaced');
   await clickText('Save changes', 'button');
   await seeText('Saved'); await wait(300);
   await seeText('Tech Corp Kenya');
   await shot('10-settings');
+});
+
+await check('Save editors and see them on the Saved page', async () => {
+  await page.goto(BASE, { waitUntil: 'networkidle0' });
+  await page.click('button[aria-label="Save Ama Owusu"]');
+  await seeText('Saved Ama Owusu');
+  await page.click('button[aria-label="Save Leo Park"]');
+  await seeText('Saved Leo Park');
+  const badge = await page.$eval('nav a[href="/saved"]', (a) => a.textContent);
+  if (!badge.includes('2')) throw new Error(`sidebar: ${badge}`);
+  await page.click('nav a[href="/saved"]');
+  await seeText('Saved editors');
+  await seeText('Leo Park');
+  await shot('20-saved');
+  await page.click('button[aria-label="Remove Leo Park from saved"]');
+  await wait(600);
+  const names = await page.evaluate(() => [...document.querySelectorAll('main h3')].map((h) => h.textContent));
+  if (names.join() !== 'Ama Owusu') throw new Error(names.join());
+  await page.reload({ waitUntil: 'networkidle0' });
+  await seeText('Ama Owusu');
+  if (await bodyHas('Leo Park')) throw new Error('un-save did not stick');
+});
+
+await check('Notifications page: list and mark all read', async () => {
+  await page.click('nav a[href="/notifications"]');
+  await seeText('unread');
+  await shot('21-notifications-page');
+  await clickText('Mark all read', 'button');
+  await seeText('All caught up');
 });
 
 await check('Notifications bell lists project updates', async () => {
@@ -314,6 +403,17 @@ await check('Mobile width: Discover has no sideways scroll', async () => {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   await shot('16-mobile-discover');
   if (overflow > 1) throw new Error(`page is ${overflow}px wider than the screen`);
+});
+
+await check('Mobile: filters open in a side panel', async () => {
+  await clickText('Filters', 'main button');
+  await seeText('Show results');
+  await clickText('Motion Designer', '[role=dialog] button');
+  await shot('22-mobile-filters');
+  await clickText('Show results', 'button');
+  await wait(700);
+  const names = await page.evaluate(() => [...document.querySelectorAll('main h3')].map((h) => h.textContent));
+  if (names.join() !== 'Sara Lind') throw new Error(names.join());
 });
 
 await browser.close();

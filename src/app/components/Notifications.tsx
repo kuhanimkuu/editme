@@ -92,6 +92,10 @@ export function NotificationsMenu({ items, unreadCount, reload }: ReturnType<typ
             ))}
           </div>
         )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => navigate('/notifications')} className="justify-center text-xs font-medium text-[#2979FF] cursor-pointer rounded-lg">
+          See all notifications
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

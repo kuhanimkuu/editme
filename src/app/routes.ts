@@ -24,6 +24,14 @@ export const router = createBrowserRouter([
         lazy: () => import('./pages/EditorPage').then((m) => ({ Component: m.EditorPage })),
       },
       {
+        path: 'how-it-works',
+        lazy: () => import('./pages/HowItWorks').then((m) => ({ Component: m.HowItWorks })),
+      },
+      {
+        path: 'help',
+        lazy: () => import('./pages/Help').then((m) => ({ Component: m.Help })),
+      },
+      {
         // Everything below needs a sign-in.
         Component: Protected,
         children: [
@@ -46,6 +54,14 @@ export const router = createBrowserRouter([
           {
             path: 'profile',
             lazy: () => import('./pages/Profile').then((m) => ({ Component: m.Profile })),
+          },
+          {
+            path: 'saved',
+            lazy: () => import('./pages/Saved').then((m) => ({ Component: m.Saved })),
+          },
+          {
+            path: 'notifications',
+            lazy: () => import('./pages/NotificationsPage').then((m) => ({ Component: m.NotificationsPage })),
           },
           {
             path: 'settings',

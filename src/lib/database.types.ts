@@ -641,6 +641,39 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_editors: {
+        Row: {
+          created_at: string
+          editor_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          editor_id: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          editor_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_editors_editor_id_fkey"
+            columns: ["editor_id"]
+            isOneToOne: false
+            referencedRelation: "editor_profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "saved_editors_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_plans: {
         Row: {
           created_at: string

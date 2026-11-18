@@ -12,6 +12,7 @@ import type { HireTarget } from '../components/HiringWizard';
 // Loaded on the first "Hire" click, not with the page.
 const HiringWizard = lazy(() => import('../components/HiringWizard').then((m) => ({ default: m.HiringWizard })));
 import { useAuth } from '../context/UserContext';
+import { SaveButton } from '../context/SavedContext';
 import { supabase, type EditorProfile, type PortfolioItem, type Profile, type ServicePlan, type Tables } from '../../lib/supabase';
 import { availabilityDot, availabilityLabels, categoryLabels, shortDate } from '../../lib/format';
 import { must } from '../../lib/errors';
@@ -171,6 +172,10 @@ export function EditorPage() {
             </div>
           </div>
           <div className="flex gap-2 sm:pb-1">
+            {!isMe && (
+              <SaveButton editorId={profile.id} name={profile.display_name} withLabel
+                className="h-9 px-3.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50" />
+            )}
             {isMe ? (
               <Button asChild variant="outline" className="rounded-xl border-gray-200"><Link to="/profile">Edit your profile</Link></Button>
             ) : canHire && plans.length > 0 ? (

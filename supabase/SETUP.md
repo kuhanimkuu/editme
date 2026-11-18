@@ -5,7 +5,7 @@ Frankfurt (eu-central-1). Deployed 17 Nov 2026.
 
 ## What's on it
 
-- Migrations 1–8 (`npx supabase@3.2.0 migration list` shows them).
+- Migrations 1–9 (`npx supabase@3.2.0 migration list` shows them).
 - Edge functions: `escrow-fund`, `account-delete` (need a sign-in),
   `payments-webhook`, `payments-worker` (no sign-in; they check their own
   signature / `CRON_SECRET`).

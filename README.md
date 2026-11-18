@@ -55,7 +55,10 @@ redirect and the `APP_URL` function secret (see `supabase/SETUP.md`).
 | Path | Page | Sign-in |
 | --- | --- | --- |
 | `/` | Discover: real editors first, then labelled samples; search, filters, hire | no |
-| `/editors/:id` | An editor's page: portfolio, packages, reviews, hire | no |
+| `/?category=colorist` | Discover on one category (the sidebar's category links) | no |
+| `/editors/:id` | An editor's page: portfolio, packages, reviews, save, hire | no |
+| `/how-it-works` | Steps for clients and editors; escrow, refunds, disputes, the live fee | no |
+| `/help` | Searchable FAQ | no |
 | `/sign-in`, `/sign-up`, `/forgot-password`, `/reset-password` | Accounts | no |
 | `/projects` | Your projects and every step: pay, accept/decline, deliver, changes, approve, dispute, review | yes |
 | `/chat` | One live conversation per paid project, with file attachments | yes |
@@ -63,10 +66,21 @@ redirect and the `APP_URL` function secret (see `supabase/SETUP.md`).
 | `/analytics` | Six months of spending/earnings and projects by status | yes |
 | `/profile` | Editor: set-up, picture, portfolio, packages, reviews. Client: projects, editors hired, reviews | yes |
 | `/settings` | Name, email, password, two-step sign-in, sign out everywhere, delete account | yes |
+| `/saved` | Saved editors (the heart on cards and editor pages) | yes |
+| `/notifications` | All notifications, unread filter, mark all read | yes |
 
 Everyone can hire; offering work means setting up an editor profile. The
 sidebar switches between **Client** and **Editor** mode. The bell shows
 project updates and new messages live.
+
+**Sidebar:** Discover (categories fold out under it), then Saved, Projects,
+Messages, Wallet, Analytics; **Explore** (How it works, Help & FAQ);
+**Account** (Notifications, Profile, Settings). Signed-out visitors see
+Discover and Explore.
+
+**Discover filters:** each group folds open/closed and shows how many of its
+options are on; "Hide filters" folds the whole panel and is remembered. On
+phones a **Filters** button opens them in a side panel.
 
 ## State of the project
 
@@ -99,6 +113,7 @@ Everything is in `supabase/`. It's deployed to the live project; see
 | `…05_discover_and_analytics` | Discover cards, profile views, analytics, account deletion check |
 | `…06_sample_editors` | example profiles for Discover while real editors are few (below) |
 | `…07_schedule_payments_worker` | runs `payments-worker` every 5 minutes when refunds or withdrawals are waiting |
+| `…09_saved_editors` | a private shortlist of editors per person (max 500) |
 | `…08_mfa_and_avatars` | two-step sign-in enforced by the database; pictures stored in your own folder; chats only for paid projects; Discover covers from video links |
 
 **Sample profiles.** So Discover doesn't look empty at launch, staff can add
@@ -158,12 +173,12 @@ npx supabase start
 docker exec -i supabase_db_editme psql -U postgres -v ON_ERROR_STOP=1 < supabase/tests/escrow_flow.sql
 ```
 
-The test (64 checks) walks the whole hire, pay, deliver, approve, review and
+The test (72 checks) walks the whole hire, pay, deliver, approve, review and
 withdraw flow, plus a declined project, sample profiles and two-step
 sign-in. It also tries the attacks the rules must block. Everything is
 rolled back afterwards.
 
-**Test the website in Chrome** (26 checks: browsing, sign-in, hiring and
+**Test the website in Chrome** (34 checks: browsing, sign-in, hiring and
 paying, approving, reviews, chat, wallet, withdrawals, profile, settings,
 phone width). Local stack only; it refuses to run against the live project:
 

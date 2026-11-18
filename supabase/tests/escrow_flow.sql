@@ -262,6 +262,27 @@ update app_config set show_samples = false;
 select pg_temp.check('one switch hides every sample',
   not exists (select 1 from editor_cards where is_sample));
 
+-- Saved editors (shortlist) ---------------------------------------------------------------
+select pg_temp.act_as((select v from ids where k = 'client'));
+insert into saved_editors (editor_id) values ((select v from ids where k = 'editor'));
+select pg_temp.check('a client saves an editor', (select count(*) = 1 from saved_editors));
+select pg_temp.must_fail('saving the same editor twice',
+  $$insert into saved_editors (editor_id) values ((select v from ids where k = 'editor'))$$);
+select pg_temp.must_fail('saving a sample profile',
+  $$insert into saved_editors (editor_id) values ('00000000-0000-0000-0000-0000000000a1')$$);
+select pg_temp.must_fail('saving into someone else''s list',
+  $$insert into saved_editors (user_id, editor_id) values ((select v from ids where k = 'stranger'), (select v from ids where k = 'editor'))$$);
+select pg_temp.act_as((select v from ids where k = 'editor'));
+select pg_temp.must_fail('an editor saving themself',
+  $$insert into saved_editors (editor_id) values (auth.uid())$$);
+select pg_temp.check('nobody else sees the shortlist', (select count(*) = 0 from saved_editors));
+set local role anon;
+select pg_temp.must_fail('visitors reading shortlists', $$select count(*) from saved_editors$$);
+reset role;
+select pg_temp.act_as((select v from ids where k = 'client'));
+delete from saved_editors where editor_id = (select v from ids where k = 'editor');
+select pg_temp.check('a client un-saves', (select count(*) = 0 from saved_editors));
+
 -- Profile pictures: own folder or https only ------------------------------------------------
 select pg_temp.act_as((select v from ids where k = 'client'));
 update profiles set avatar_url = (select v from ids where k = 'client')::text || '/ab12cd34-me.png' where id = auth.uid();
