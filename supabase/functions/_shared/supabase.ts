@@ -21,11 +21,15 @@ export function userClient(req: Request): SupabaseClient {
   });
 }
 
-/** The signed-in caller, or a 401. */
+/** The signed-in caller, or a 401. Someone with two-step sign-in turned on
+ *  must also have entered their code (the same rule as the database). */
 export async function requireUser(req: Request): Promise<User> {
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
   if (!token) throw new HttpError(401, 'Sign in first');
   const { data, error } = await adminClient().auth.getUser(token);
   if (error || !data.user) throw new HttpError(401, 'Sign in again');
+  const { data: mfaOk, error: mfaError } = await userClient(req).rpc('mfa_ok');
+  if (mfaError) throw mfaError;
+  if (mfaOk !== true) throw new HttpError(403, 'Enter your two-step sign-in code first');
   return data.user;
 }

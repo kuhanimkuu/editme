@@ -1,301 +1,209 @@
-import { ArrowUpRight, ArrowDownLeft, Shield, Lock, Plus, Download, TrendingUp, Clock } from 'lucide-react';
+import { useState } from 'react';
+import { Link } from 'react-router';
+import { toast } from 'sonner';
+import { motion } from 'motion/react';
+import { ArrowUpRight, ArrowDownLeft, Shield, Lock, Clock, Wallet as WalletIcon, Banknote } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { Separator } from '../components/ui/separator';
-import { mockTransactions } from '../data/mockData';
-import { useUser } from '../context/UserContext';
-import { motion } from 'motion/react';
+import { Input } from '../components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { EmptyState, ErrorState, PageLoading, Spinner } from '../components/common';
+import { useAuth } from '../context/UserContext';
+import { supabase, type WalletTransaction } from '../../lib/supabase';
+import { money, shortDate } from '../../lib/format';
+import { errorMessage, must } from '../../lib/errors';
+import { useAsync } from '../../lib/useAsync';
+
+const typeLabels: Record<WalletTransaction['type'], string> = {
+  escrow: 'Escrow payment', payment: 'Payment received', refund: 'Refund', withdrawal: 'Withdrawal',
+};
+const statusStyle: Record<WalletTransaction['status'], string> = {
+  pending: 'bg-[#f59e0b] text-white', in_escrow: 'bg-[#9333ea] text-white', released: 'bg-gray-500 text-white',
+  refunded: 'bg-gray-400 text-white', completed: 'bg-[#10b981] text-white', failed: 'bg-red-500 text-white',
+};
+const statusText: Record<WalletTransaction['status'], string> = {
+  pending: 'Processing', in_escrow: 'In escrow', released: 'Released to editor', refunded: 'Refunded', completed: 'Done', failed: 'Failed',
+};
+/** Money coming to this person (green, +). */
+const incoming = (t: WalletTransaction) => t.type === 'payment' || t.type === 'refund';
 
 export function Wallet() {
-  const { userRole } = useUser();
+  const { user, mode } = useAuth();
+  const uid = user!.id;
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
 
-  const totalBalance = 15000;
-  const availableFunds = 8300;
-  const fundsInEscrow = 6700;
+  const data = useAsync(async () => {
+    const [summary, txns, config] = await Promise.all([
+      supabase.rpc('wallet_summary'),
+      supabase.from('wallet_transactions').select('*').eq('user_id', uid).order('created_at', { ascending: false }).limit(100),
+      supabase.from('app_config').select('min_withdrawal_cents').maybeSingle(),
+    ]);
+    return {
+      summary: must(summary)[0] ?? null,
+      txns: must(txns),
+      minWithdrawal: config.data?.min_withdrawal_cents ?? 1000,
+    };
+  }, [uid]);
 
-  const statusColors = {
-    'completed': 'bg-[#10b981] text-white',
-    'in-escrow': 'bg-[#9333ea] text-white',
-    'pending': 'bg-[#f59e0b] text-white',
-    'failed': 'bg-red-500 text-white',
-  };
+  if (data.loading && !data.data) return <PageLoading label="Loading wallet" />;
+  if (data.error || !data.data) return <ErrorState message="Couldn't load your wallet." onRetry={data.reload} />;
+  const { summary, txns, minWithdrawal } = data.data;
+  const s = summary ?? { available_cents: 0, in_escrow_cents: 0, incoming_cents: 0, pending_withdrawal_cents: 0, total_earned_cents: 0, total_spent_cents: 0 };
+  const isEditor = mode === 'editor';
 
   return (
     <div className="max-w-6xl mx-auto px-6 lg:px-8 py-8">
-      {/* Header */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
-        <h1 className="text-4xl font-bold mb-2">Wallet & Payments</h1>
-        <p className="text-gray-600">
-          Secure escrow system for safe and transparent transactions
-        </p>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+        <h1 className="text-4xl font-bold mb-2">Wallet</h1>
+        <p className="text-gray-600">{isEditor ? 'What you have earned, and paying it out' : 'Money you have put into escrow, and refunds'}</p>
       </motion.div>
 
-      {/* Main Balance Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="mb-8"
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-8">
         <Card className="border-0 rounded-3xl bg-gradient-to-br from-[#9333ea] via-[#ec4899] to-[#f97316] text-white shadow-xl overflow-hidden relative">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -ml-24 -mb-24" />
-          
           <CardContent className="p-8 relative z-10">
-            <div className="flex items-start justify-between mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
               <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Shield className="w-5 h-5" />
-                  <span className="text-sm font-medium opacity-90">Secured by EditMe</span>
-                </div>
-                <p className="text-5xl font-bold mb-1">${totalBalance.toLocaleString()}</p>
-                <p className="text-sm opacity-80">Total Balance</p>
+                <div className="flex items-center gap-2 mb-2"><Shield className="w-5 h-5" /><span className="text-sm font-medium opacity-90">Held by EditMe</span></div>
+                <p className="text-5xl font-bold mb-1">{money(isEditor ? s.available_cents : s.in_escrow_cents)}</p>
+                <p className="text-sm opacity-80">{isEditor ? 'Available to withdraw' : 'In escrow for your projects'}</p>
               </div>
-              <div className="flex gap-2">
-                <Button size="sm" className="bg-white/20 hover:bg-white/30 backdrop-blur-sm border-white/30 text-white rounded-xl">
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Funds
+              {isEditor && (
+                <Button onClick={() => setWithdrawOpen(true)} disabled={s.available_cents < minWithdrawal}
+                  className="bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 text-white rounded-xl self-start">
+                  <ArrowUpRight className="w-4 h-4 mr-1" />Withdraw
                 </Button>
-                <Button size="sm" variant="outline" className="bg-white/10 hover:bg-white/20 backdrop-blur-sm border-white/30 text-white rounded-xl">
-                  <Download className="w-4 h-4" />
-                </Button>
-              </div>
+              )}
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm opacity-80">Available</span>
-                  <ArrowUpRight className="w-4 h-4 opacity-60" />
+              {(isEditor ? [
+                { label: 'Coming to you', value: s.incoming_cents, hint: 'In escrow on your active projects', icon: Lock },
+                { label: 'Withdrawals in progress', value: s.pending_withdrawal_cents, hint: 'Being sent to your payout method', icon: Clock },
+              ] : [
+                { label: 'Paid to editors', value: s.total_spent_cents, hint: 'Released after you approved', icon: ArrowUpRight },
+                { label: 'Refunds', value: txns.filter((t) => t.type === 'refund' && t.status !== 'failed').reduce((a, t) => a + t.amount_cents, 0), hint: 'Returned to your payment method', icon: ArrowDownLeft },
+              ]).map(({ label, value, hint, icon: Icon }) => (
+                <div key={label} className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
+                  <div className="flex items-center justify-between mb-2"><span className="text-sm opacity-80">{label}</span><Icon className="w-4 h-4 opacity-60" /></div>
+                  <p className="text-2xl font-bold">{money(value)}</p>
+                  <p className="text-xs opacity-70 mt-1">{hint}</p>
                 </div>
-                <p className="text-2xl font-bold">${availableFunds.toLocaleString()}</p>
-                <p className="text-xs opacity-70 mt-1">Ready to withdraw</p>
-              </div>
-
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm opacity-80">In Escrow</span>
-                  <Lock className="w-4 h-4 opacity-60" />
-                </div>
-                <p className="text-2xl font-bold">${fundsInEscrow.toLocaleString()}</p>
-                <p className="text-xs opacity-70 mt-1">Secured transactions</p>
-              </div>
+              ))}
             </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Quick Actions */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8"
-      >
-        <Card className="border-gray-200 rounded-2xl hover:shadow-md transition-all cursor-pointer group">
-          <CardContent className="p-5 text-center">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 group-hover:bg-[#2979FF] flex items-center justify-center mx-auto mb-3 transition-colors">
-              <Plus className="w-6 h-6 text-[#2979FF] group-hover:text-white transition-colors" />
-            </div>
-            <p className="font-semibold text-sm">Add Money</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-gray-200 rounded-2xl hover:shadow-md transition-all cursor-pointer group">
-          <CardContent className="p-5 text-center">
-            <div className="w-12 h-12 rounded-xl bg-green-50 group-hover:bg-[#10b981] flex items-center justify-center mx-auto mb-3 transition-colors">
-              <ArrowDownLeft className="w-6 h-6 text-[#10b981] group-hover:text-white transition-colors" />
-            </div>
-            <p className="font-semibold text-sm">Withdraw</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-gray-200 rounded-2xl hover:shadow-md transition-all cursor-pointer group">
-          <CardContent className="p-5 text-center">
-            <div className="w-12 h-12 rounded-xl bg-purple-50 group-hover:bg-[#9333ea] flex items-center justify-center mx-auto mb-3 transition-colors">
-              <Shield className="w-6 h-6 text-[#9333ea] group-hover:text-white transition-colors" />
-            </div>
-            <p className="font-semibold text-sm">Escrow</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-gray-200 rounded-2xl hover:shadow-md transition-all cursor-pointer group">
-          <CardContent className="p-5 text-center">
-            <div className="w-12 h-12 rounded-xl bg-orange-50 group-hover:bg-[#f97316] flex items-center justify-center mx-auto mb-3 transition-colors">
-              <Download className="w-6 h-6 text-[#f97316] group-hover:text-white transition-colors" />
-            </div>
-            <p className="font-semibold text-sm">History</p>
           </CardContent>
         </Card>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Transaction History */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3 }}
-          className="lg:col-span-2"
-        >
-          <Card className="border-gray-200 rounded-2xl">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xl">Transaction History</CardTitle>
-                <Button variant="ghost" size="sm" className="text-[#2979FF]">
-                  View All
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {mockTransactions.map((transaction, index) => (
-                  <motion.div
-                    key={transaction.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 + index * 0.05 }}
-                  >
-                    <div className="flex items-center gap-4 p-4 rounded-xl hover:bg-gray-50 transition-colors">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                        transaction.amount > 0 
-                          ? 'bg-green-50' 
-                          : transaction.status === 'in-escrow'
-                          ? 'bg-purple-50'
-                          : 'bg-gray-100'
-                      }`}>
-                        {transaction.amount > 0 ? (
-                          <ArrowDownLeft className={`w-5 h-5 ${
-                            transaction.status === 'in-escrow' ? 'text-[#9333ea]' : 'text-[#10b981]'
-                          }`} />
-                        ) : (
-                          <ArrowUpRight className="w-5 h-5 text-gray-600" />
-                        )}
+        <Card className="border-gray-200 rounded-2xl lg:col-span-2">
+          <CardHeader><CardTitle className="text-xl">Transactions</CardTitle></CardHeader>
+          <CardContent>
+            {txns.length === 0 ? (
+              <EmptyState icon={<WalletIcon className="w-8 h-8" />} title="No transactions yet"
+                text={isEditor ? 'Payments appear here when clients approve your work.' : 'Escrow payments appear here when you hire an editor.'}
+                action={!isEditor ? <Button asChild className="rounded-xl bg-[#2979FF] hover:bg-[#1565C0]"><Link to="/">Find an editor</Link></Button> : undefined} />
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {txns.map((t) => {
+                  const plus = incoming(t);
+                  return (
+                    <li key={t.id} className="flex items-center gap-4 py-3.5">
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${plus ? 'bg-green-50' : t.status === 'in_escrow' ? 'bg-purple-50' : 'bg-gray-100'}`}>
+                        {plus ? <ArrowDownLeft className="w-5 h-5 text-[#10b981]" /> : <ArrowUpRight className={`w-5 h-5 ${t.status === 'in_escrow' ? 'text-[#9333ea]' : 'text-gray-600'}`} />}
                       </div>
-                      
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-semibold truncate">{transaction.description}</p>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Clock className="w-3 h-3" />
-                          <span>{new Date(transaction.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                        </div>
+                        <p className="font-semibold truncate">{t.description}</p>
+                        <p className="text-sm text-gray-500">{typeLabels[t.type]} · {shortDate(t.created_at)}</p>
                       </div>
-
-                      <div className="text-right">
-                        <p className={`font-bold text-lg ${
-                          transaction.amount > 0 ? 'text-[#10b981]' : 'text-gray-900'
-                        }`}>
-                          {transaction.amount > 0 ? '+' : ''}{transaction.amount > 0 ? transaction.amount : transaction.amount}
-                          <span className="text-sm ml-1">USD</span>
-                        </p>
-                        <Badge className={`${statusColors[transaction.status]} border-none text-xs mt-1`}>
-                          {transaction.status.replace('-', ' ')}
-                        </Badge>
+                      <div className="text-right flex-shrink-0">
+                        <p className={`font-bold ${plus ? 'text-[#10b981]' : 'text-gray-900'}`}>{plus ? '+' : '-'}{money(t.amount_cents, t.currency)}</p>
+                        <Badge className={`${statusStyle[t.status]} border-none text-xs mt-1`}>{statusText[t.status]}</Badge>
                       </div>
-                    </div>
-                    {index < mockTransactions.length - 1 && <Separator />}
-                  </motion.div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Security & Info Sidebar */}
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4 }}
-          className="space-y-6"
-        >
-          {/* Escrow Info */}
+        <div className="space-y-6">
           <Card className="border-gray-200 rounded-2xl bg-gradient-to-br from-purple-50 to-pink-50">
             <CardContent className="p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-[#9333ea] flex items-center justify-center">
-                  <Shield className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">Escrow Protection</h3>
-                  <p className="text-xs text-gray-600">100% Secure</p>
-                </div>
+                <div className="w-12 h-12 rounded-xl bg-[#9333ea] flex items-center justify-center"><Shield className="w-6 h-6 text-white" /></div>
+                <h3 className="font-semibold">How escrow works</h3>
               </div>
-              <p className="text-sm text-gray-700 mb-4">
-                Your funds are held securely until work is approved. Both parties are protected throughout the transaction.
-              </p>
-              <Button variant="outline" size="sm" className="w-full rounded-lg border-[#9333ea] text-[#9333ea] hover:bg-[#9333ea] hover:text-white">
-                Learn More
-              </Button>
+              <ol className="text-sm text-gray-700 space-y-2 list-decimal list-inside">
+                <li>The client pays when hiring; EditMe holds the money.</li>
+                <li>The editor accepts, works and delivers.</li>
+                <li>The client approves and the editor is paid, or asks for changes.</li>
+                <li>Declined or cancelled before work starts: full refund.</li>
+                <li>Problems: either side opens a dispute and EditMe decides.</li>
+              </ol>
             </CardContent>
           </Card>
-
-          {/* Statistics */}
-          <Card className="border-gray-200 rounded-2xl">
-            <CardHeader>
-              <CardTitle className="text-lg">This Month</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-[#10b981]" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Earned</p>
-                    <p className="font-bold">$8,450</p>
-                  </div>
-                </div>
-                <Badge className="bg-green-100 text-green-700 border-none">
-                  +12%
-                </Badge>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                    <ArrowUpRight className="w-5 h-5 text-[#2979FF]" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Spent</p>
-                    <p className="font-bold">$12,300</p>
-                  </div>
-                </div>
-                <Badge className="bg-blue-100 text-blue-700 border-none">
-                  -5%
-                </Badge>
-              </div>
-
-              <Separator />
-
-              <div className="text-center p-3">
-                <p className="text-2xl font-bold text-[#2979FF] mb-1">
-                  {userRole === 'client' ? '4' : '23'}
-                </p>
-                <p className="text-sm text-gray-600">Transactions</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Trust Badge */}
-          <Card className="border-gray-200 rounded-2xl bg-gradient-to-br from-blue-50 to-cyan-50">
-            <CardContent className="p-6 text-center">
-              <div className="w-16 h-16 rounded-full bg-[#2979FF] flex items-center justify-center mx-auto mb-3">
-                <Lock className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="font-semibold mb-2">Bank-Level Security</h3>
-              <p className="text-sm text-gray-600">
-                Your financial data is encrypted and protected with industry-leading security protocols.
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
+          {isEditor && (
+            <Card className="border-gray-200 rounded-2xl">
+              <CardContent className="p-6 text-sm text-gray-600 space-y-1">
+                <p className="font-semibold text-gray-900 flex items-center gap-2"><Banknote className="w-4 h-4" />Lifetime earnings</p>
+                <p className="text-2xl font-bold text-gray-900">{money(s.total_earned_cents)}</p>
+                <p>Minimum withdrawal: {money(minWithdrawal)}</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
+
+      <WithdrawDialog open={withdrawOpen} available={s.available_cents} min={minWithdrawal}
+        onClose={() => setWithdrawOpen(false)} onDone={() => void data.reload()} />
     </div>
+  );
+}
+
+function WithdrawDialog({ open, available, min, onClose, onDone }: {
+  open: boolean; available: number; min: number; onClose: () => void; onDone: () => void;
+}) {
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const cents = Math.round(Number(amount) * 100);
+  const valid = Number.isFinite(cents) && cents >= min && cents <= available;
+
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    const { error: e } = await supabase.rpc('request_withdrawal', { p_amount_cents: cents });
+    setBusy(false);
+    if (e) return setError(await errorMessage(e));
+    toast.success(`Withdrawal of ${money(cents)} requested`);
+    setAmount('');
+    onClose();
+    onDone();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
+      <DialogContent className="max-w-sm rounded-2xl">
+        <DialogHeader>
+          <DialogTitle>Withdraw earnings</DialogTitle>
+          <DialogDescription>Available: {money(available)}. Minimum {money(min)}. It's sent to your payout method.</DialogDescription>
+        </DialogHeader>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+          <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))}
+            placeholder="0.00" aria-label="Amount in dollars" className="pl-7 rounded-xl h-11 text-lg" />
+        </div>
+        <button className="text-xs text-[#2979FF] hover:underline text-left" onClick={() => setAmount((available / 100).toFixed(2))}>Withdraw everything</button>
+        {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+        <DialogFooter className="gap-2">
+          <Button variant="outline" className="rounded-xl" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button className="rounded-xl bg-[#2979FF] hover:bg-[#1565C0]" onClick={submit} disabled={!valid || busy}>
+            {busy ? <Spinner className="text-white" /> : `Withdraw ${valid ? money(cents) : ''}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

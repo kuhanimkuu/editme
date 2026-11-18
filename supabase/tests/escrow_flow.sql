@@ -9,11 +9,26 @@
 
 begin;
 
+-- Start from an empty marketplace: the local seed data (supabase/seed.sql) is
+-- removed here and comes back with the rollback at the end.
+delete from public.projects where client_id in (select id from auth.users where email like '%@editme.local')
+                              or editor_id in (select id from auth.users where email like '%@editme.local');
+delete from auth.users where email like '%@editme.local';
+delete from public.sample_editors;
+
 -- Acting as someone: the same JWT claims Supabase sets for a signed-in user.
 create function pg_temp.act_as(p_uid uuid) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', p_uid, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+end $$;
+
+-- The same, with the sign-in level ('aal1' = password only, 'aal2' = two-step done).
+create function pg_temp.act_as_aal(p_uid uuid, p_aal text) returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', p_uid, 'role', 'authenticated', 'aal', p_aal)::text, true);
   execute 'set local role authenticated';
 end $$;
 
@@ -199,6 +214,92 @@ select pg_temp.check('the conversation list shows both projects',
   (select count(*) = 2 from my_conversations()));
 select pg_temp.must_fail('the client settling their own refund',
   $$select settle_transaction((select id from wallet_transactions where type = 'refund' limit 1), true)$$);
+
+-- Sample profiles ---------------------------------------------------------------------------
+-- Sarah (real) is a video editor. Samples: a colorist, a video editor, and a hidden one.
+select pg_temp.act_as_server();
+insert into sample_editors (id, display_name, category, headline, starting_price_cents, portfolio) values
+  ('00000000-0000-0000-0000-0000000000a1', 'Sample Colorist', 'colorist', 'Film look grading', 25000,
+   '[{"title":"Grade","image_url":"https://example.com/a.jpg"}]'),
+  ('00000000-0000-0000-0000-0000000000a2', 'Sample Video Editor', 'video_editor', 'Promo cuts', 20000, '[]'),
+  ('00000000-0000-0000-0000-0000000000a3', 'Hidden Sample', 'animator', null, null, '[]');
+update sample_editors set is_active = false where id = '00000000-0000-0000-0000-0000000000a3';
+
+set local role anon;
+select pg_temp.check('visitors see real editors and active samples, samples labelled',
+  (select count(*) filter (where not is_sample) = 1 and count(*) filter (where is_sample) = 2 from editor_cards));
+select pg_temp.check('samples carry no ratings, reviews, finished projects or verification',
+  (select bool_and(rating_avg is null and rating_count is null and completed_count is null and not is_verified)
+     from editor_cards where is_sample));
+select pg_temp.check('a sample shows its first reel as the cover',
+  (select cover_url = 'https://example.com/a.jpg' from editor_cards where display_name = 'Sample Colorist'));
+select pg_temp.check('hidden samples stay hidden',
+  not exists (select 1 from sample_editors where display_name = 'Hidden Sample'));
+select pg_temp.must_fail('visitors adding a sample',
+  $$insert into sample_editors (display_name, category) values ('x', 'colorist')$$);
+reset role;
+
+select pg_temp.act_as((select v from ids where k = 'client'));
+select pg_temp.check('a sample has no plans to hire',
+  not exists (select 1 from service_plans where editor_id = '00000000-0000-0000-0000-0000000000a1'));
+select pg_temp.must_fail('hiring a sample by its id',
+  $$select create_project('00000000-0000-0000-0000-0000000000a1', 'Hack attempt', '')$$);
+select pg_temp.must_fail('a client adding a sample',
+  $$insert into sample_editors (display_name, category) values ('x', 'colorist')$$);
+update sample_editors set display_name = 'Mine';
+select pg_temp.check('a client''s edit reaches no sample',
+  not exists (select 1 from sample_editors where display_name = 'Mine'));
+select pg_temp.check('signed-in people see samples too',
+  (select count(*) = 2 from editor_cards where is_sample));
+
+-- Samples fade out once a category has enough real editors.
+select pg_temp.act_as_server();
+update app_config set samples_until_real = 1;
+select pg_temp.check('a category with enough real editors stops showing samples',
+  not exists (select 1 from editor_cards where is_sample and category = 'video_editor')
+  and exists (select 1 from editor_cards where is_sample and category = 'colorist'));
+update app_config set show_samples = false;
+select pg_temp.check('one switch hides every sample',
+  not exists (select 1 from editor_cards where is_sample));
+
+-- Profile pictures: own folder or https only ------------------------------------------------
+select pg_temp.act_as((select v from ids where k = 'client'));
+update profiles set avatar_url = (select v from ids where k = 'client')::text || '/ab12cd34-me.png' where id = auth.uid();
+select pg_temp.check('a picture in your own avatars folder is accepted',
+  (select avatar_url like '%/ab12cd34-me.png' from profiles where id = auth.uid()));
+select pg_temp.must_fail('a picture path in someone else''s folder',
+  $$update profiles set avatar_url = (select v from ids where k = 'editor')::text || '/x.png' where id = auth.uid()$$);
+select pg_temp.must_fail('a plain http picture address',
+  $$update profiles set avatar_url = 'http://example.com/x.png' where id = auth.uid()$$);
+
+-- Two-step sign-in, enforced by the database ---------------------------------------------
+select pg_temp.act_as_server();
+insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at)
+values (gen_random_uuid(), (select v from ids where k = 'client'), 'test app', 'totp', 'verified', now(), now());
+
+select pg_temp.act_as_aal((select v from ids where k = 'client'), 'aal1');
+select pg_temp.check('password only: their projects are hidden', (select count(*) = 0 from projects));
+select pg_temp.check('password only: wallet shows nothing', (select count(*) = 0 from wallet_summary()));
+select pg_temp.check('password only: no conversations', (select count(*) = 0 from my_conversations()));
+select pg_temp.check('password only: no analytics', my_analytics() is null);
+select pg_temp.check('password only: no notifications', (select count(*) = 0 from notifications));
+select pg_temp.must_fail('password only: hiring',
+  $$select create_project((select id from service_plans where editor_id = (select v from ids where k = 'editor') and tier = 'basic'), 'Sneaky hire')$$);
+select pg_temp.must_fail('password only: sending a message',
+  $$insert into messages (project_id, content) values ((select v from ids where k = 'p1'), 'hi')$$);
+update profiles set display_name = 'Hijacked' where id = auth.uid();
+select pg_temp.check('password only: profile edits change nothing',
+  (select display_name <> 'Hijacked' from profiles where id = (select v from ids where k = 'client')));
+select pg_temp.check('password only: deleting the account is blocked',
+  cardinality(account_deletion_blockers()) = 1 and (account_deletion_blockers())[1] like '%two-step%');
+select pg_temp.check('password only: the marketplace is still public',
+  (select count(*) > 0 from editor_cards) and (select count(*) > 0 from service_plans));
+
+select pg_temp.act_as_aal((select v from ids where k = 'client'), 'aal2');
+select pg_temp.check('with the code: projects are back', (select count(*) > 0 from projects));
+select pg_temp.check('with the code: wallet is back', (select count(*) = 1 from wallet_summary()));
+select pg_temp.act_as_aal((select v from ids where k = 'editor'), 'aal1');
+select pg_temp.check('people without two-step are unaffected', (select count(*) > 0 from projects));
 
 select pg_temp.act_as_server();
 do $$ begin raise notice 'ALL CHECKS PASSED'; end $$;

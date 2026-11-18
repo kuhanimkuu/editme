@@ -1,0 +1,55 @@
+# The live Supabase project
+
+Project: `oaawpnkfldvhnngmgtul` (https://oaawpnkfldvhnngmgtul.supabase.co),
+Frankfurt (eu-central-1). Deployed 17 Nov 2026.
+
+## What's on it
+
+- Migrations 1–7 (`npx supabase@3.2.0 migration list` shows them).
+- Edge functions: `escrow-fund`, `account-delete` (need a sign-in),
+  `payments-webhook`, `payments-worker` (no sign-in; they check their own
+  signature / `CRON_SECRET`).
+- Function secrets: `APP_URL` (now `http://localhost:5173`; change it to the
+  real site address when there is one), `CRON_SECRET`.
+  **Never set `PAYMENTS_MODE=test` here.**
+- Vault: `project_url` and `cron_secret` (the same value as the
+  `CRON_SECRET` function secret). The database uses them to call the worker.
+- Schedule: `payments-worker` every 5 minutes (pg_cron). It only calls the
+  function when a refund or withdrawal is waiting.
+- Auth: email confirmation on, two-step sign-in available, passwords of 8+
+  characters with letters and digits. Settings live in `config.toml`; the
+  `[remotes.production]` section keeps the strict ones for the live project.
+
+## Deploying changes
+
+From `D:\editme`, signed in with an account that's an owner of the
+EditMe organization (`npx supabase@3.2.0 login` in your own terminal):
+
+```powershell
+npx supabase@3.2.0 db push --remote          # new migrations
+npx supabase@3.2.0 functions deploy          # all functions
+npx supabase@3.2.0 config push               # auth settings (check the diff first)
+```
+
+## Changing CRON_SECRET
+
+Set the function secret and the Vault copy to the same new value, or the
+schedule stops working:
+
+```sql
+select vault.update_secret((select id from vault.secrets where name = 'cron_secret'), '<new value>');
+```
+
+## Still to do
+
+- **Email sender**: Supabase's built-in email only sends a few emails an hour
+  and is meant for testing. Before real users sign up, add a provider such as
+  Resend (Authentication > Emails > SMTP settings). It needs a domain you can
+  add DNS records to.
+- **Site address**: when the site has a domain, update `site_url` and
+  `additional_redirect_urls` in `config.toml`, `APP_URL` (function secret),
+  then `config push`.
+- **Payment provider**: until one is chosen, payments answer "not set up yet".
+
+Never share the secret / service_role key, the database password or an
+access token (`sbp_…`).

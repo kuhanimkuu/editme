@@ -438,3 +438,24 @@ verify_jwt = false
 # gateway's sign-in check would otherwise reject before the function sees it.
 [functions.payments-worker]
 verify_jwt = false
+
+# ----------------------------------------------------------------------------
+# The live project. Settings above are for local development; these override
+# them when pushing to production (`npx supabase config push`), so the live
+# site keeps the strict ones.
+# ----------------------------------------------------------------------------
+[remotes.production]
+project_id = "oaawpnkfldvhnngmgtul"
+
+[remotes.production.auth.email]
+# People confirm their email before they can sign in (money is involved).
+enable_confirmations = true
+max_frequency = "1m0s"
+
+[remotes.production.auth.mfa.totp]
+# Two-step sign-in with an authenticator app (Settings > Security).
+enroll_enabled = true
+verify_enabled = true
+
+[remotes.production.storage.vector]
+enabled = false
