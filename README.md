@@ -30,6 +30,26 @@ npm run dev:local             # uses .env.localdb.local (local URL + key)
 (`npx supabase status`). Local test accounts are listed at the top of
 `supabase/seed.sql` (password `editme-local-1`).
 
+## Hosting (Vercel)
+
+`vercel.json` sets the build (`npm ci`, `npm run build`, `dist/`), sends every
+path to the app (so links like `/projects` work), caches built files for a
+year, and adds security headers. The content policy only lets the page talk
+to itself, the Supabase project, Google Fonts and the YouTube/Vimeo players:
+**if the Supabase project or a payment provider changes, update
+`connect-src` (and friends) there.**
+
+In the Vercel project, set these environment variables (Production and
+Preview), then redeploy; they're baked in at build time:
+
+| Name | Value |
+| --- | --- |
+| `VITE_SUPABASE_URL` | `https://oaawpnkfldvhnngmgtul.supabase.co` |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | the project's publishable key (`sb_publishable_…`) |
+
+The site's address must also be the Supabase sign-in site URL / allowed
+redirect and the `APP_URL` function secret (see `supabase/SETUP.md`).
+
 ## Screens
 
 | Path | Page | Sign-in |
