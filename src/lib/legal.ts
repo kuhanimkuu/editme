@@ -5,12 +5,12 @@
  * with each new account as the terms version they accepted.
  */
 export const LEGAL = {
-  /** Who runs EditMe. Replace with the registered company name, e.g. "EditMe Ltd". */
+  /** Who runs EditMe. Not registered yet (Nov 2026): replace with the company name once it is, e.g. "EditMe Ltd". */
   operator: 'EditMe',
   /** Registered address, shown in the Terms and Privacy Policy once set. */
   address: '',
   /** One address for support, legal notices, privacy requests and copyright complaints. */
-  contactEmail: '',
+  contactEmail: 'moseschore9@gmail.com',
   /** Law that governs the Terms. */
   governingLaw: 'Kenya',
   /** Data protection regulator people can complain to. */
