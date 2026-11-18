@@ -130,6 +130,9 @@ example editors to `sample_editors`. The rules:
   real editors (6 by default). `app_config.show_samples = false` hides them all.
 - Photos and reels must be ones EditMe has the rights to (stock, generated or
   our own). Don't use real people's faces as made-up editors.
+- The live samples (12, two per category) are in `supabase/ops/sample_editors.sql`
+  (safe to rerun). Their cover art is EditMe's own, in `public/samples/`;
+  avatars are initials, and no real videos are linked as their work.
 
 **How a project moves** (each step is a database function that checks who
 is calling and what state the project is in):
