@@ -447,6 +447,17 @@ verify_jwt = false
 [remotes.production]
 project_id = "oaawpnkfldvhnngmgtul"
 
+[remotes.production.auth]
+# Where sign-up confirmation and password-reset links send people back to.
+site_url = "https://editme-eosin.vercel.app"
+# Also allowed: Vercel preview deployments, and `npm run dev` on a PC
+# working against the live project.
+additional_redirect_urls = [
+  "https://editme-eosin.vercel.app/**",
+  "https://editme-*-david-murungas-projects.vercel.app/**",
+  "http://localhost:5173/**",
+]
+
 [remotes.production.auth.email]
 # People confirm their email before they can sign in (money is involved).
 enable_confirmations = true

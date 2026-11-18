@@ -1,21 +1,31 @@
 // Small helpers shared by EditMe's edge functions.
 
-// The site that may call these functions from a browser. Set APP_URL in the
-// function secrets (e.g. https://editme.app); local development defaults to
-// Vite's address.
-const allowedOrigin = Deno.env.get('APP_URL') ?? 'http://localhost:5173';
+// The sites that may call these functions from a browser:
+//   APP_URL        the live site (also used for payment return links)
+//   EXTRA_ORIGINS  optional, comma-separated; "*" matches one label, e.g.
+//                  http://localhost:5173,https://editme-*-team.vercel.app
+// Sign-in is a bearer token, not a cookie, so this isn't what protects the
+// functions; it just stops other sites' pages from using them.
+const appUrl = Deno.env.get('APP_URL') ?? 'http://localhost:5173';
+const allowed = [appUrl, ...(Deno.env.get('EXTRA_ORIGINS') ?? '').split(',')]
+  .map((o) => o.trim().replace(/\/+$/, ''))
+  .filter(Boolean)
+  .map((o) => new RegExp('^' + o.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[a-z0-9-]+') + '$', 'i'));
 
-export const corsHeaders: Record<string, string> = {
-  'Access-Control-Allow-Origin': allowedOrigin,
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  Vary: 'Origin',
-};
+function corsFor(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin');
+  return {
+    'Access-Control-Allow-Origin': origin && allowed.some((re) => re.test(origin)) ? origin : appUrl,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    Vary: 'Origin',
+  };
+}
 
 export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -31,15 +41,25 @@ export class HttpError extends Error {
  *  message, so internals never reach the browser. */
 export function handlePost(handler: (req: Request) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
-    if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-    if (req.method !== 'POST') return json({ error: 'Use POST' }, 405);
-    try {
-      return await handler(req);
-    } catch (e) {
-      if (e instanceof HttpError) return json({ error: e.message }, e.status);
-      console.error(e);
-      return json({ error: 'Something went wrong. Try again.' }, 500);
+    const cors = corsFor(req);
+    if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+    let res: Response;
+    if (req.method !== 'POST') {
+      res = json({ error: 'Use POST' }, 405);
+    } else {
+      try {
+        res = await handler(req);
+      } catch (e) {
+        if (e instanceof HttpError) {
+          res = json({ error: e.message }, e.status);
+        } else {
+          console.error(e);
+          res = json({ error: 'Something went wrong. Try again.' }, 500);
+        }
+      }
     }
+    for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
+    return res;
   };
 }
 

@@ -9,8 +9,14 @@ Frankfurt (eu-central-1). Deployed 17 Nov 2026.
 - Edge functions: `escrow-fund`, `account-delete` (need a sign-in),
   `payments-webhook`, `payments-worker` (no sign-in; they check their own
   signature / `CRON_SECRET`).
-- Function secrets: `APP_URL` (now `http://localhost:5173`; change it to the
-  real site address when there is one), `CRON_SECRET`.
+- Website: https://editme-eosin.vercel.app (Vercel, deploys every push to
+  `main`). It's the sign-in `site_url`; redirects also allow Vercel preview
+  deployments and `http://localhost:5173` (`[remotes.production.auth]` in
+  `config.toml`).
+- Function secrets: `APP_URL` = https://editme-eosin.vercel.app (payment
+  return links; allowed to call the functions), `EXTRA_ORIGINS` =
+  `http://localhost:5173,https://editme-*-david-murungas-projects.vercel.app`
+  (also allowed; `*` = one label), `CRON_SECRET`.
   **Never set `PAYMENTS_MODE=test` here.**
 - Vault: `project_url` and `cron_secret` (the same value as the
   `CRON_SECRET` function secret). The database uses them to call the worker.
@@ -46,9 +52,10 @@ select vault.update_secret((select id from vault.secrets where name = 'cron_secr
   and is meant for testing. Before real users sign up, add a provider such as
   Resend (Authentication > Emails > SMTP settings). It needs a domain you can
   add DNS records to.
-- **Site address**: when the site has a domain, update `site_url` and
-  `additional_redirect_urls` in `config.toml`, `APP_URL` (function secret),
-  then `config push`.
+- **Own domain**: when the site moves from editme-eosin.vercel.app, update
+  `site_url` / `additional_redirect_urls` in `config.toml` (then
+  `config push`), the `APP_URL` secret, and `connect-src` etc. in
+  `vercel.json` only if the Supabase project changes.
 - **Payment provider**: until one is chosen, payments answer "not set up yet".
 
 Never share the secret / service_role key, the database password or an
