@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, type EditorProfile, type Profile } from '../../lib/supabase';
+import { takePendingOAuth } from '../../lib/oauth';
 
 /** Which side of the marketplace the person is using right now. */
 export type Mode = 'client' | 'editor';
@@ -111,6 +112,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [uid]);
+
+  // Back from "Continue with Google": save the terms version they agreed to
+  // before leaving (new accounts only) and open the side they signed up for.
+  useEffect(() => {
+    if (!user || !user.app_metadata?.providers?.includes('google')) return;
+    const pending = takePendingOAuth();
+    if (!pending) return;
+    if (!user.user_metadata?.terms_version) {
+      void supabase.auth.updateUser({ data: { terms_version: pending.terms, terms_accepted_at: new Date().toISOString() } });
+    }
+    if (pending.role === 'editor') setMode('editor');
+    // Once per signed-in person.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const refreshProfile = useCallback(async () => {
     if (uid) await loadProfile(uid);

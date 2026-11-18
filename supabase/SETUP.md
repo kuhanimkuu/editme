@@ -46,6 +46,40 @@ schedule stops working:
 select vault.update_secret((select id from vault.secrets where name = 'cron_secret'), '<new value>');
 ```
 
+## Continue with Google
+
+The site shows "Continue with Google" on sign-in and sign-up as soon as Google
+is switched on in Supabase (it asks `/auth/v1/settings`), so nothing breaks
+while it's off. New Google accounts get their Google name and photo
+(migration 10). Google sends people back to `/sign-in?next=…`, so two-step
+sign-in still applies.
+
+To switch it on:
+
+1. **Google Cloud Console** (console.cloud.google.com), a project called EditMe
+   → *Google Auth Platform*:
+   - *Branding*: app name `EditMe`, support email, home page
+     `https://editme-eosin.vercel.app`, privacy policy `…/privacy`, terms
+     `…/terms`. Authorized domains: `oaawpnkfldvhnngmgtul.supabase.co` and
+     `editme-eosin.vercel.app`. (A logo is optional; adding one needs Google's
+     brand check, a few days.)
+   - *Audience*: External, then **Publish app** (otherwise only listed test
+     users can sign in). Name, email and photo need no Google review.
+   - *Clients* → Create client → *Web application*:
+     - Authorized JavaScript origins: `https://editme-eosin.vercel.app`,
+       `http://localhost:5173`
+     - Authorized redirect URI:
+       `https://oaawpnkfldvhnngmgtul.supabase.co/auth/v1/callback`
+2. Put the **client secret** in `supabase/.env` (gitignored) as
+   `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=…`. Never in chat or git.
+3. Put the **client ID** (public) in the `[remotes.production.auth.external.google]`
+   block at the end of `config.toml`, uncomment it, and run
+   `npm run config:push`. Always push config this way: it refuses if the
+   secret is missing, which would otherwise break Google sign-in on the live site.
+
+When the site moves to its own domain, add it to the client's JavaScript
+origins and the Branding authorized domains.
+
 ## Still to do
 
 - **Email sender**: Supabase's built-in email only sends a few emails an hour

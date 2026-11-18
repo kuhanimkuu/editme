@@ -4,8 +4,10 @@ import type { Database } from './database.types';
 // Both values are public by design (they ship in the page); row level
 // security in the database decides what each person can read and write.
 // Set them in .env.local (see .env.example).
-const url = import.meta.env.VITE_SUPABASE_URL;
-const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const url = supabaseUrl;
+export const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const key = supabaseKey;
 
 if (!url || !key) {
   throw new Error(

@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "dev:local": "vite --mode localdb",
     "test:ui": "node tests/ui_e2e.mjs",
-    "brand": "node scripts/make-brand-assets.mjs"
+    "brand": "node scripts/make-brand-assets.mjs",
+    "config:push": "node scripts/config-push.mjs"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "1.2.3",

@@ -71,6 +71,13 @@ redirect and the `APP_URL` function secret (see `supabase/SETUP.md`).
   signed-in pages out). It refreshes on every deploy.
 - **Install to home screen:** `public/site.webmanifest`.
 
+## Sign-in methods
+
+Email + password (with email confirmation and optional two-step codes), and
+"Continue with Google" once it's switched on: see `supabase/SETUP.md`. Push
+Supabase settings with `npm run config:push`, never a bare `supabase config
+push`.
+
 ## Legal pages
 
 `/terms`, `/privacy`, `/refunds` (payments, escrow and refunds) and

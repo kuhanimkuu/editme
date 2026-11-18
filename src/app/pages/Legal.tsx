@@ -200,6 +200,7 @@ const privacy: Doc = {
         <p><strong>You give us:</strong></p>
         <ul>
           <li><strong>Account:</strong> email address, password (stored only as a secure hash; we can't read it), name, and whether you mainly hire or work as an editor.</li>
+          <li><strong>If you continue with Google:</strong> Google shares your name, email address and profile photo with us. We never get your Google password or anything else from your Google account.</li>
           <li><strong>Profile:</strong> anything you add, such as photo, username, bio, location, website and company name. Editors also add a headline, specialization, skills, software, rates, packages, availability and portfolio (uploads and video links).</li>
           <li><strong>Projects:</strong> briefs, the package and price, deadlines, progress, deliveries, revision requests, problem reports and reviews.</li>
           <li><strong>Messages:</strong> chat messages and files shared in a project's chat.</li>

@@ -323,5 +323,18 @@ select pg_temp.act_as_aal((select v from ids where k = 'editor'), 'aal1');
 select pg_temp.check('people without two-step are unaffected', (select count(*) > 0 from projects));
 
 select pg_temp.act_as_server();
+
+-- Continue with Google -----------------------------------------------------------
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('00000000-0000-0000-0000-0000000000a1', 'google@test.local',
+   '{"full_name":"Grace Wanjiru","name":"Grace","picture":"https://lh3.googleusercontent.com/a/photo=s96-c"}'),
+  ('00000000-0000-0000-0000-0000000000a2', 'google2@test.local',
+   '{"name":"Odd Photo","avatar_url":"javascript:alert(1)"}');
+select pg_temp.check('Google sign-up: name and photo come from Google',
+  (select display_name = 'Grace Wanjiru' and avatar_url = 'https://lh3.googleusercontent.com/a/photo=s96-c'
+     and primary_role = 'client' from profiles where id = '00000000-0000-0000-0000-0000000000a1'));
+select pg_temp.check('Google sign-up: a photo that is not an https address is ignored',
+  (select display_name = 'Odd Photo' and avatar_url is null from profiles where id = '00000000-0000-0000-0000-0000000000a2'));
+
 do $$ begin raise notice 'ALL CHECKS PASSED'; end $$;
 rollback;
